@@ -1,0 +1,47 @@
+{
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --port 3333 --open"
+  },
+  "dependencies": {
+    "@vueuse/core": "*",
+    "@webcontainer/api": "^1.5.3",
+    "monaco-editor": "^0.52.2",
+    "monaco-languageclient": "^9.5.0",
+    "vscode-languageserver-protocol": "^3.17.5",
+    "vue": "^3.5.13",
+    "vue-router": "*",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0",
+    "xterm-addon-web-links": "^0.9.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "*",
+    "@iconify-json/carbon": "*",
+    "@types/node": "*",
+    "@unocss/eslint-plugin": "*",
+    "@vitejs/plugin-vue": "*",
+    "@vue-macros/volar": "*",
+    "@vue/test-utils": "*",
+    "eslint": "*",
+    "eslint-plugin-format": "*",
+    "jsdom": "*",
+    "lint-staged": "*",
+    "simple-git-hooks": "*",
+    "taze": "*",
+    "typescript": "*",
+    "unocss": "*",
+    "unplugin-auto-import": "*",
+    "unplugin-vue-components": "*",
+    "unplugin-vue-macros": "*",
+    "unplugin-vue-router": "*",
+    "vite": "*",
+    "vitest": "*",
+    "vue-tsc": "*"
+  },
+  "resolutions": {
+    "unplugin": "*",
+    "vite": "*"
+  }
+}
