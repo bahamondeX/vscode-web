@@ -22,6 +22,24 @@ export default defineConfig({
       'Cross-Origin-Opener-Policy': 'same-origin',
     }
   },
+  optimizeDeps: {
+    // Add monaco-editor to optimize deps to prevent it from being bundled and causing issues
+    include: ['monaco-editor'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Create a separate chunk for Monaco editor to improve loading performance
+          'monaco-editor': ['monaco-editor'],
+        },
+      },
+    },
+  },
+  worker: {
+    // This ensures Web Workers can be bundled correctly
+    format: 'es',
+  },
   plugins: [
     VueMacros({
       defineOptions: false,

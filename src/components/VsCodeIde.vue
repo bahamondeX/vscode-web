@@ -1,4 +1,4 @@
-<!-- CompleteVsCodeIdeWithTerminal.vue -->
+<!-- VsCodeIde.vue -->
 <template>
   <div class="web-ide">
     <!-- Title Bar -->
@@ -43,7 +43,7 @@
         
         <!-- File Explorer -->
         <VsCodeFileExplorer
-          :webcontainer="webcontainer"
+          :webcontainer="webcontainerRef"
           :file-tree="fileTree"
           :expanded-dirs="expandedDirs"
           :selected-path="selectedPath"
@@ -68,15 +68,15 @@
         
         <!-- Monaco Editor -->
         <VsCodeMonacoEditor
-          v-if="openTabs.length > 0"
-          :webcontainer="webcontainer"
+          v-if="openTabs.length > 0 && webcontainerReady"
+          :webcontainer="webcontainerRef"
           :current-file="activeTabIndex >= 0 ? openTabs[activeTabIndex] : null"
           @file-saved="handleFileSaved"
         />
         
         <div v-else class="empty-editor">
           <div class="empty-editor-message">
-            Select a file from explorer to start editing
+            {{ webcontainerReady ? 'Select a file from explorer to start editing' : 'Loading WebContainer...' }}
           </div>
         </div>
         
@@ -86,7 +86,11 @@
           :style="{ height: terminalHeight + 'px' }"
         >
           <div class="terminal-resize-handle" @mousedown="startTerminalResize"></div>
-          <VsCodeTerminal :webcontainer="webcontainer" @terminal-closed="handleTerminalClosed" />
+          <VsCodeTerminal 
+            v-if="webcontainerReady" 
+            :webcontainer="webcontainerRef" 
+            @terminal-closed="handleTerminalClosed" 
+          />
         </div>
       </div>
     </div>
@@ -133,18 +137,40 @@
 </template>
 
 <script setup>
-
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { WebContainer } from '@webcontainer/api';
+import VsCodeFileExplorer from './VsCodeFileExplorer.vue';
+import VsCodeMonacoEditor from './VsCodeMonacoEditor.vue';
+import VsCodeTerminal from './VsCodeTerminal.vue';
 
+// WebContainer state
+const webcontainerRef = ref(null);
+const webcontainerReady = ref(false);
 
-// WebContainer instance
-const webcontainer = ref(null);
+// File system state
+const fileTree = ref([]);
+const expandedDirs = ref(['/src', '/src/components', '/src/styles', '/public']);
+const selectedPath = ref('');
+const openTabs = ref([]);
+const activeTabIndex = ref(-1);
+
+// Terminal state
+const terminalVisible = ref(true);
+const terminalHeight = ref(300); // Default height
+const isResizingTerminal = ref(false);
+
+// Context menu state
+const showContextMenu = ref(false);
+const contextMenuStyle = ref({});
+const contextMenuTarget = ref(null);
 
 // Initialize WebContainer
 const initWebContainer = async () => {
   try {
+    console.log('Booting WebContainer...');
     // Boot the WebContainer
-    webcontainer.value = await WebContainer.boot();
+    webcontainerRef.value = await WebContainer.boot();
+    console.log('WebContainer booted successfully');
     
     // Initialize the file system with initial files
     await loadFileSystem();
@@ -152,6 +178,7 @@ const initWebContainer = async () => {
     // Update file tree after initial file system is loaded
     await refreshFileTree();
     
+    webcontainerReady.value = true;
   } catch (error) {
     console.error('Failed to initialize WebContainer:', error);
   }
@@ -160,6 +187,7 @@ const initWebContainer = async () => {
 // Load initial file system into WebContainer
 const loadFileSystem = async () => {
   try {
+    console.log('Loading file system...');
     // Create a simple project structure
     const files = {
       'package.json': {
@@ -226,7 +254,7 @@ const loadFileSystem = async () => {
         directory: {
           'index.html': {
             file: {
-              contents: `<!DOCTYPE html>\n<html>\n<head>\n  <title>WebContainer App</title>\n</head>\n<body>\n  <div id="root"></div>\n  <script src="../src/main.js"></html>`
+              contents: `<div id='root'></div>`
             }
           },
           'favicon.ico': {
@@ -238,37 +266,22 @@ const loadFileSystem = async () => {
       }
     };
     
-    await webcontainer.value.mount(files);
+    await webcontainerRef.value.mount(files);
+    console.log('File system loaded successfully');
     
   } catch (error) {
     console.error('Error loading file system:', error);
   }
 };
 
-// File system state
-const fileTree = ref([]);
-const expandedDirs = ref(['/src', '/src/components', '/src/styles', '/public']);
-const selectedPath = ref('');
-const openTabs = ref([]);
-const activeTabIndex = ref(-1);
-
-// Terminal state
-const terminalVisible = ref(true);
-const terminalHeight = ref(300); // Default height
-const isResizingTerminal = ref(false);
-
-// Context menu state
-const showContextMenu = ref(false);
-const contextMenuStyle = ref({});
-const contextMenuTarget = ref(null);
-
 // Refresh file tree from WebContainer
 const refreshFileTree = async () => {
-  if (!webcontainer.value) return;
+  if (!webcontainerRef.value) return;
   
   try {
+    console.log('Refreshing file tree...');
     // Get the root directory listing
-    const rootDirEntries = await webcontainer.value.fs.readdir('/', { withFileTypes: true });
+    const rootDirEntries = await webcontainerRef.value.fs.readdir('/', { withFileTypes: true });
     
     // Map entries to file tree structure
     const tree = await Promise.all(rootDirEntries.map(async (entry) => {
@@ -288,6 +301,7 @@ const refreshFileTree = async () => {
     }));
     
     fileTree.value = tree;
+    console.log('File tree refreshed');
   } catch (error) {
     console.error('Error refreshing file tree:', error);
   }
@@ -296,7 +310,7 @@ const refreshFileTree = async () => {
 // Get directory children recursively
 const getDirectoryChildren = async (dirPath) => {
   try {
-    const entries = await webcontainer.value.fs.readdir(dirPath, { withFileTypes: true });
+    const entries = await webcontainerRef.value.fs.readdir(dirPath, { withFileTypes: true });
     
     return await Promise.all(entries.map(async (entry) => {
       const path = `${dirPath}/${entry.name}`;
@@ -337,6 +351,10 @@ const getFileIconClass = (fileName) => {
       return 'icon-css';
     case 'json':
       return 'icon-json';
+    case 'md':
+      return 'icon-md';
+    case 'vue':
+      return 'icon-vue';
     default:
       return 'icon-file';
   }
@@ -445,7 +463,7 @@ const closeContextMenu = () => {
 const createFile = async (parentPath, fileName) => {
   try {
     const path = `${parentPath}/${fileName}`;
-    await webcontainer.value.fs.writeFile(path, '');
+    await webcontainerRef.value.fs.writeFile(path, '');
     await refreshFileTree();
     return path;
   } catch (error) {
@@ -457,7 +475,7 @@ const createFile = async (parentPath, fileName) => {
 const createDirectory = async (parentPath, dirName) => {
   try {
     const path = `${parentPath}/${dirName}`;
-    await webcontainer.value.fs.mkdir(path);
+    await webcontainerRef.value.fs.mkdir(path);
     await refreshFileTree();
     return path;
   } catch (error) {
@@ -472,13 +490,13 @@ const renameFile = async (oldPath, newName) => {
     const newPath = `${dirPath}/${newName}`;
     
     // Read the current file
-    const contents = await webcontainer.value.fs.readFile(oldPath);
+    const contents = await webcontainerRef.value.fs.readFile(oldPath);
     
     // Create the new file with the same contents
-    await webcontainer.value.fs.writeFile(newPath, contents);
+    await webcontainerRef.value.fs.writeFile(newPath, contents);
     
     // Delete the old file
-    await webcontainer.value.fs.rm(oldPath);
+    await webcontainerRef.value.fs.rm(oldPath);
     
     // Update open tabs if necessary
     const tabIndex = openTabs.value.findIndex(tab => tab.path === oldPath);
@@ -500,7 +518,7 @@ const renameFile = async (oldPath, newName) => {
 
 const deleteFileOrDir = async (path) => {
   try {
-    await webcontainer.value.fs.rm(path, { recursive: true });
+    await webcontainerRef.value.fs.rm(path, { recursive: true });
     
     // Close tab if file is open
     const tabIndex = openTabs.value.findIndex(tab => tab.path === path);
@@ -581,6 +599,7 @@ const handleFileSaved = async (file) => {
 
 // Lifecycle hooks
 onMounted(async () => {
+  console.log('Component mounted, initializing WebContainer...');
   // Initialize the WebContainer
   await initWebContainer();
   
@@ -590,11 +609,18 @@ onMounted(async () => {
       closeContextMenu();
     }
   });
+  
+  // Add click event listener to document for context menu
+  document.addEventListener('click', (e) => {
+    if (showContextMenu.value && !e.target.closest('.context-menu')) {
+      closeContextMenu();
+    }
+  });
 });
 
 onBeforeUnmount(() => {
   // Clean up resources
-  if (webcontainer.value) {
+  if (webcontainerRef.value) {
     // WebContainer API doesn't have a direct method to shut down,
     // but we can clean up any event listeners or workers here
   }
@@ -949,6 +975,16 @@ onBeforeUnmount(() => {
   color: #5a5a5a;
 }
 
+.icon-md::before {
+  content: "MD";
+  color: #2980b9;
+}
+
+.icon-vue::before {
+  content: "Vue";
+  color: #41b883;
+}
+
 .icon-folder::before {
   content: "📁";
 }
@@ -960,4 +996,5 @@ onBeforeUnmount(() => {
 .icon-file::before {
   content: "📄";
 }
+
 </style>
